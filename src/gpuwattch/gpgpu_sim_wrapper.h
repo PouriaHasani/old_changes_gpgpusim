@@ -78,7 +78,7 @@ class gpgpu_sim_wrapper {
                                 double init_value,
                                 const std::string& kernel_info_string,
                                 bool print_trace);
-  void power_metrics_calculations();
+  void power_metrics_calculations(double*);
   void set_inst_power(bool clk_gated_lanes, double tot_cycles,
                       double busy_cycles, double tot_inst, double int_inst,
                       double fp_inst, double load_inst, double store_inst,

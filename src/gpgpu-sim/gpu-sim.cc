@@ -28,7 +28,6 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "gpu-sim.h"
-
 #include <math.h>
 #include <signal.h>
 #include <stdio.h>
@@ -943,7 +942,15 @@ enum divergence_support_t gpgpu_sim::simd_model() const {
 void gpgpu_sim_config::init_clock_domains(void) {
   sscanf(gpgpu_clock_domains, "%lf:%lf:%lf:%lf", &core_freq, &icnt_freq,
          &l2_freq, &dram_freq);
-	for(unsigned i=0;i<m_shader_config.n_simt_clusters;i++)
+	for(unsigned i=0;i<m_shader_config.n_simt_clusters-7;i++)
+	{
+		printf("\n freq = %d",m_shader_config.n_simt_clusters);
+		 //scanf("%lf", &cluster_freq[i]);
+		  cluster_freq[i] = 300*(1<<20);
+		  cluster_period[i] = 1/ cluster_freq[i];
+    printf("\n cluster period: %.20lf, cluster_freq: %.20lf",cluster_period[i],cluster_freq[i]);
+	}
+	for(unsigned i=m_shader_config.n_simt_clusters-7;i<m_shader_config.n_simt_clusters;i++)
 	{
 		printf("\n freq = %d",m_shader_config.n_simt_clusters);
 		 //scanf("%lf", &cluster_freq[i]);
@@ -1707,9 +1714,126 @@ void dram_t::dram_log(int task) {
     StatDisp(mrqq_Dist);
   }
 }
+void gpgpu_sim::data_collect(int next_round) {
+	
+	static unsigned total_d1_misses = 0, total_d1_accesses = 0;
+	static int num_empty_ibuffers_per_cluster;
+	 unsigned n_req =0;
+	 unsigned n_cmd = 0;
+	 unsigned n_nop = 0;
+	 unsigned n_activity = 0;
+	 unsigned n_act = 0;
+	 unsigned n_pre = 0;
+	 unsigned n_rd = 0;
+	 unsigned n_wr = 0;
+	unsigned curr_cycle;
+	int num_cycles = 200;
+	int cycle_data =10;
+	static int* time_series= (int*)malloc((sizeof (int))*(num_cycles*cycle_data*m_shader_config->n_simt_clusters+1));
+		unsigned custer_d1_misses = 0, cluster_d1_accesses = 0;
+		if(next_round)
+			curr_cycle = 0;
+		else
+			curr_cycle+=1;
+	for(unsigned i=0;i<m_shader_config->n_simt_clusters;i++)	
+		total_d1_misses = 0;
+		total_d1_accesses = 0;
+		n_req =0;
+		n_cmd = 0;
+		n_nop = 0;
+		n_activity = 0;
+		n_act = 0;
+		n_pre = 0;
+		n_rd = 0;
+		n_wr = 0;
+		num_empty_ibuffers_per_cluster=0;
+	int num_empty_ibuffers_per_sm;
+	FILE *fout;
+	double power_data;
+	for(unsigned i=0;i<m_shader_config->n_simt_clusters;i++)
+	{
+	  //Active SMs
+	m_gpgpusim_wrapper->power_metrics_calculations(&power_data);
+		num_empty_ibuffers_per_sm = 0;
+		for (unsigned j = 0; j < m_cluster[i]->m_core[0]->m_config->max_warps_per_shader; j++) {
+			if (!m_cluster[i]->m_core[0]->m_warp[j]->ibuffer_empty())
+				num_empty_ibuffers_per_sm+=1;
+		}
+		num_empty_ibuffers_per_cluster += num_empty_ibuffers_per_sm;
+		
+
+
+		//Cache stats
+
+
+		m_cluster[i]->print_cache_stats(fout, cluster_d1_accesses,
+										custer_d1_misses);
+		total_d1_misses += custer_d1_misses;
+		total_d1_accesses += cluster_d1_accesses;
+		
+
+		//Memory stats
+		for (unsigned i = 0; i < m_memory_config->m_n_mem; i++) {
+		  m_memory_partition_unit[i]->set_dram_power_stats(
+			  n_cmd ,
+			  n_activity,
+			  n_nop,
+			  n_act,
+			  n_pre,
+			  n_rd ,
+			  n_wr ,
+			  n_req);
+		}
+			//Power stats
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters] = total_d1_misses;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+1] = total_d1_accesses;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+2] = n_cmd;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+3] = n_activity;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+4] = n_act;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+5] = n_pre;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+6] = n_rd;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+7] = n_wr;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+8] = n_req;
+			time_series[curr_cycle*cycle_data*m_shader_config->n_simt_clusters+9] = num_empty_ibuffers_per_cluster;			
+	}
+
+   ime_series[num_cycles*cycle_data*m_shader_config->n_simt_clusters+10]
+   FILE *fptr;
+
+   // use appropriate location if you are using MacOS or Linux
+   if(next_round)
+   {
+	   fptr = fopen("~/data.txt","a");
+
+	   if(fptr == NULL)
+	   {
+		  printf("Error!");   
+		  exit(1);             
+	   }
+
+	   fwrite(time_series, sizeof(int), sizeof(time_series), fptr);
+	   fclose(fptr);
+   }	
+		
+	
+
+
+}
+
+void gpgpu_sim::New_freq() {
+	int k;
+	char* cmd = "./esrnn";
+	system(cmd);
+	  k = rand()%10;
+	    for(unsigned i=0;i<m_shader_config->n_simt_clusters;i++)
+  {
+	  m_config.cluster_freq[i] = (300+k*20)*(1<<20);
+  }
+}
 
 // Find next clock domain and increment its time
 int gpgpu_sim::next_clock_domain(void) {
+  
   double smallest = icnt_time < dram_time ? icnt_time: dram_time;
   long int mask = 0x00;
   for(unsigned i=0;i<m_shader_config->n_simt_clusters;i++)
@@ -1743,29 +1867,38 @@ int gpgpu_sim::next_clock_domain(void) {
   return mask;
 }
 
-void gpgpu_sim::issue_block2core() {
+void gpgpu_sim::issue_block2core(int cluster_id) {
   unsigned last_issued = m_last_cluster_issue;
-  for (unsigned i = 0; i < m_shader_config->n_simt_clusters; i++) {
-    unsigned idx = (i + last_issued + 1) % m_shader_config->n_simt_clusters;
-    unsigned num = m_cluster[idx]->issue_block2core();
-    if (num) {
-      m_last_cluster_issue = idx;
-      m_total_cta_launched += num;
+  unsigned idx = (cluster_id+ last_issued + 1) % m_shader_config->n_simt_clusters;
+  unsigned num = m_cluster[idx]->issue_block2core();
+  if (num) {
+    m_last_cluster_issue = idx;
+    m_total_cta_launched += num;
     }
-  }
 }
 
 unsigned long long g_single_step =
     0;  // set this in gdb to single step the pipeline
 
 void gpgpu_sim::cycle() {
+	 int flag=0;
+	 if(!gpu_sim_cycle%1600)
+	 {
+		 New_freq();
+		flag =1;
+	 }
+	 else
+		 flag =0;
+data_collect(flag);
+
+
   int clock_mask = next_clock_domain();
   
   for(unsigned i=0;i<m_shader_config->n_simt_clusters;i++)
   {
 	  if (clock_mask & (CORE<<i)){//printf("\n cluster %d",i);
-        for(unsigned j=0;j<m_shader_config->n_simt_clusters;j++)
-		  m_cluster[j]->icnt_cycle();}
+        //for(unsigned j=0;j<m_shader_config->n_simt_clusters;j++)
+		  m_cluster[i]->icnt_cycle();}
 	 //printf("\ne %d",clock_mask);
   }
   
@@ -1852,7 +1985,7 @@ void gpgpu_sim::cycle() {
   for(unsigned i=0;i<m_shader_config->n_simt_clusters;i++)
   {
 	  if (clock_mask & (CORE<<i))
-	  {//printf("\n mask is %d %d %d",CORE+i,i,clock_mask);
+	  {//printf("\n mask is %d %d %d",CORE<<i,i,clock_mask);
     // L1 cache + shader core pipeline stages
 
 
@@ -1903,7 +2036,7 @@ void gpgpu_sim::cycle() {
       cluster_all[j]=0;
     }
   }   
-      
+   // GPGPU_Context()->the_gpgpusim->g_the_gpu->dump_pipeline((0x40|0x4|0x1),0,0);  
    //printf("\n cluster num: %d, cycle: %d",i,gpu_sim_cycle);
     if (g_interactive_debugger_enabled) gpgpu_debug();
 
@@ -1917,7 +2050,7 @@ void gpgpu_sim::cycle() {
     }
 #endif
 
-    issue_block2core();
+    issue_block2core(i);
     decrement_kernel_latency();
 
     // Depending on configuration, invalidate the caches once all of threads are

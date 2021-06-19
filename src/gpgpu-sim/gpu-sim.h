@@ -328,6 +328,7 @@ class gpgpu_sim_config : public power_config,
     m_valid = false;
     gpgpu_ctx = ctx;
   }
+
   void reg_options(class OptionParser *opp);
   void init() {
     gpu_stat_sample_freq = 10000;
@@ -484,12 +485,14 @@ class gpgpu_sim : public gpgpu_t {
   gpgpu_sim(const gpgpu_sim_config &config, gpgpu_context *ctx);
 
   void set_prop(struct cudaDeviceProp *prop);
-
+  void data_collect(int);
+  void New_freq();
   void launch(kernel_info_t *kinfo);
   bool can_start_kernel();
   unsigned finished_kernel();
   void set_kernel_done(kernel_info_t *kernel);
   void stop_all_running_kernels();
+
 
   void init();
   void cycle();
@@ -571,7 +574,7 @@ class gpgpu_sim : public gpgpu_t {
   // clocks
   void reinit_clock_domains(void);
   int next_clock_domain(void);
-  void issue_block2core();
+  void issue_block2core(int);
   void print_dram_stats(FILE *fout) const;
   void shader_print_runtime_stat(FILE *fout);
   void shader_print_l1_miss_stat(FILE *fout) const;

@@ -406,14 +406,14 @@ void gpgpu_sim_wrapper::set_NoC_power(double noc_tot_reads,
   sample_perf_counters[NOC_A] = noc_tot_reads + noc_tot_writes;
 }
 
-void gpgpu_sim_wrapper::power_metrics_calculations() {
+void gpgpu_sim_wrapper::power_metrics_calculations(double* power_data) {
   total_sample_count++;
   kernel_sample_count++;
 
   // Current sample power
   double sample_power =
       proc->rt_power.readOp.dynamic + sample_cmp_pwr[CONST_DYNAMICP];
-
+power_data = sample_power;
   // Average power
   // Previous + new + constant dynamic power (e.g., dynamic clocking power)
   kernel_tot_power += sample_power;

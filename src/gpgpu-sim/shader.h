@@ -71,7 +71,7 @@
 #define WRITE_MASK_SIZE 8
 
 class gpgpu_context;
-
+//int global_shader_id;
 enum exec_unit_type_t {
   NONE = 0,
   SP = 1,
@@ -105,6 +105,9 @@ class shd_warp_t {
     m_inst_in_pipeline = 0;
     reset();
   }
+	
+  void get_warp_state(bool* miss,bool* func_done,bool* s_done, bool* in_pipe);
+	
   void reset() {
     assert(m_stores_outstanding == 0);
     assert(m_inst_in_pipeline == 0);
@@ -282,6 +285,7 @@ class shd_warp_t {
  public:
   unsigned int m_cdp_latency;
   bool m_cdp_dummy;
+	
 };
 
 inline unsigned hw_tid_from_wid(unsigned wid, unsigned warp_size, unsigned i) {
@@ -359,7 +363,7 @@ class scheduler_unit {  // this can be copied freely, so can be used in std
   // all the derived schedulers.  The scheduler's behaviour can be
   // modified by changing the contents of the m_next_cycle_prioritized_warps
   // list.
-  void cycle();
+  void cycle(int);
 
   // These are some common ordering fucntions that the
   // higher order schedulers can take advantage of
@@ -1883,6 +1887,7 @@ class shader_core_ctx : public core_t {
   // used by simt_core_cluster:
   // modifiers
   void cycle();
+  //void scheduler_choose_policy();
   void reinit(unsigned start_thread, unsigned end_thread,
               bool reset_not_completed);
   void issue_block2core(class kernel_info_t &kernel);
@@ -2109,7 +2114,8 @@ class shader_core_ctx : public core_t {
     m_stats->n_simt_to_mem[m_sid] += n_flits;
   }
   bool check_if_non_released_reduction_barrier(warp_inst_t &inst);
-
+  std::vector<shd_warp_t *> m_warp;  // per warp information array
+    const shader_core_config *m_config;
  protected:
   unsigned inactive_lanes_accesses_sfu(unsigned active_count, double latency) {
     return (((32 - active_count) >> 1) * latency) +
@@ -2187,7 +2193,7 @@ class shader_core_ctx : public core_t {
   unsigned m_sid;  // shader id
   unsigned m_tpc;  // texture processor cluster id (aka, node id when using
                    // interconnect concentration)
-  const shader_core_config *m_config;
+
   const memory_config *m_memory_config;
   class simt_core_cluster *m_cluster;
 
@@ -2214,7 +2220,7 @@ class shader_core_ctx : public core_t {
   int m_last_warp_fetched;
 
   // decode/dispatch
-  std::vector<shd_warp_t *> m_warp;  // per warp information array
+
   barrier_set_t m_barriers;
   ifetch_buffer_t m_inst_fetch_buffer;
   std::vector<register_set> m_pipeline_reg;
@@ -2345,14 +2351,14 @@ class simt_core_cluster {
   float get_current_occupancy(unsigned long long &active,
                               unsigned long long &total) const;
   virtual void create_shader_core_ctx() = 0;
-
+	shader_core_ctx **m_core;
  protected:
   unsigned m_cluster_id;
   gpgpu_sim *m_gpu;
   const shader_core_config *m_config;
   shader_core_stats *m_stats;
   memory_stats_t *m_memory_stats;
-  shader_core_ctx **m_core;
+  
   const memory_config *m_mem_config;
 
   unsigned m_cta_issue_next_core;

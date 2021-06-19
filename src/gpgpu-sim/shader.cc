@@ -1027,9 +1027,39 @@ void shader_core_ctx::issue_warp(register_set &pipe_reg_set,
 void shader_core_ctx::issue() {
   // Ensure fair round robin issu between schedulers
   unsigned j;
+  bool miss;
+  bool func_done;
+  bool s_done;
+  bool in_pipe;
+  int miss_all=0;
+  bool func_done_all=0;
+  bool s_done_all=0;
+  bool in_pipe_all=0;
+  for (unsigned w = 0; w < m_config->max_warps_per_shader; w++){
+    m_warp[w]->get_warp_state(&miss,&func_done,&s_done,&in_pipe);
+    miss_all+=miss;
+    func_done_all+=func_done;
+    s_done_all+=s_done;
+    in_pipe_all+=in_pipe;
+  }
+
   for (unsigned i = 0; i < schedulers.size(); i++) {
     j = (Issue_Prio + i) % schedulers.size();
-    schedulers[j]->cycle();
+    
+    if(miss_all>4){
+    	schedulers[j]->cycle(0);
+    	//printf("\nscheduler type: 0");
+    }
+    
+    else if(func_done_all ==1){
+    	schedulers[j]->cycle(1);
+    	//printf("\nscheduler type: 1");
+    }
+    	
+    else{
+	schedulers[j]->cycle(2);
+	//printf("\nscheduler type: 2");
+    }
   }
   Issue_Prio = (Issue_Prio + 1) % schedulers.size();
 
@@ -1127,7 +1157,7 @@ void scheduler_unit::order_by_priority(
   }
 }
 
-void scheduler_unit::cycle() {
+void scheduler_unit::cycle(int sch_type) {
   SCHED_DPRINTF("scheduler_unit::cycle()\n");
   bool valid_inst =
       false;  // there was one warp with a valid instruction to issue (didn't
@@ -1135,8 +1165,35 @@ void scheduler_unit::cycle() {
   bool ready_inst = false;   // of the valid instructions, there was one not
                              // waiting for pending register writes
   bool issued_inst = false;  // of these we issued one
+ 
+  static unsigned num_cycles = 0;
+  num_cycles +=1;
 
-  order_warps();
+   // m_core[]->get_warp_state( &miss, &func_done, &s_done, &in_pipe);
+  if(sch_type == 0)
+  {
+      order_lrr(m_next_cycle_prioritized_warps, m_supervised_warps,
+                m_last_supervised_issued, m_supervised_warps.size());
+  }
+  if(sch_type == 1)
+  {
+    order_by_priority(m_next_cycle_prioritized_warps, m_supervised_warps,
+                    m_last_supervised_issued, m_supervised_warps.size(),
+                    ORDERING_GREEDY_THEN_PRIORITY_FUNC,
+                    scheduler_unit::sort_warps_by_oldest_dynamic_id);
+  }
+  if(sch_type == 2)
+  {
+    order_by_priority(m_next_cycle_prioritized_warps, m_supervised_warps,
+                    m_last_supervised_issued, m_supervised_warps.size(),
+                    ORDERED_PRIORITY_FUNC_ONLY,
+                    scheduler_unit::sort_warps_by_oldest_dynamic_id);
+  }
+
+  if(  num_cycles == 3000)
+        num_cycles = 0; 
+  //order_warps();
+    
   for (std::vector<shd_warp_t *>::const_iterator iter =
            m_next_cycle_prioritized_warps.begin();
        iter != m_next_cycle_prioritized_warps.end(); iter++) {
@@ -3030,7 +3087,7 @@ void shader_core_ctx::display_simt_state(FILE *fout, int mask) const {
         if (done && (mask & 8)) {
           unsigned done_cycle = m_thread[tid]->donecycle();
           if (done_cycle) {
-            printf("\n w%02u:t%03u: done @ cycle %u", i, tid, done_cycle);
+          //  printf("\n w%02u:t%03u: done @ cycle %u", i, tid, done_cycle);
           }
         }
       }
@@ -3352,6 +3409,13 @@ void shader_core_config::set_pipeline_latency() {
   max_dp_latency = dp_latency[1];
   max_tensor_core_latency = tensor_latency;
 }
+
+//void shader_core_ctx::scheduler_choose_policy(int num_sched,bool* arr_done_sched){
+//for(
+
+//}
+
+    
 
 void shader_core_ctx::cycle() {
   if (!isactive() && get_not_completed() == 0) return;
@@ -3789,7 +3853,12 @@ bool shd_warp_t::waiting() {
   }
   return false;
 }
-
+void shd_warp_t::get_warp_state(bool* miss,bool* func_done,bool* s_done, bool* in_pipe){
+  	*miss = m_imiss_pending;
+	*func_done = functional_done();
+	*s_done = stores_done();
+	*in_pipe = inst_in_pipeline();
+}
 void shd_warp_t::print(FILE *fout) const {
   if (!done_exit()) {
     fprintf(fout, "w%02u npc: 0x%04x, done:%c%c%c%c:%2u i:%u s:%u a:%u (done: ",
@@ -4131,7 +4200,7 @@ simt_core_cluster::simt_core_cluster(class gpgpu_sim *gpu, unsigned cluster_id,
 
 void simt_core_cluster::core_cycle() {
   for (std::list<unsigned>::iterator it = m_core_sim_order.begin();
-       it != m_core_sim_order.end(); ++it) {//printf("\n gpu_sim_insn:%d last_gpu_sim_insn: %d",gpu_sim_insn,last_gpu_sim_insn);
+       it != m_core_sim_order.end(); ++it) {
     m_core[*it]->cycle();
   }
 
@@ -4318,6 +4387,7 @@ void simt_core_cluster::icnt_cycle() {
       if (!m_core[cid]->fetch_unit_response_buffer_full()) {
         m_response_fifo.pop_front();
         m_core[cid]->accept_fetch_response(mf);
+       //   printf("\n instruction to buffer");
       }
     } else {
       // data response
