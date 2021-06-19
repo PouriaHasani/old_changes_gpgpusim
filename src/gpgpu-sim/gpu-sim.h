@@ -389,6 +389,8 @@ class gpgpu_sim_config : public power_config,
   double icnt_period;
   double dram_period;
   double l2_period;
+  double* cluster_period = (double*)malloc(sizeof(double)*m_shader_config.n_simt_clusters);
+  double* cluster_freq = (double*)malloc(sizeof(double)*m_shader_config.n_simt_clusters);
 
   // GPGPU-Sim timing model options
   unsigned long long gpu_max_cycle_opt;
@@ -604,6 +606,9 @@ class gpgpu_sim : public gpgpu_t {
   double icnt_time;
   double dram_time;
   double l2_time;
+  const shader_core_config *m_shader_config;
+  double *cluster_time = (double*)malloc(sizeof(double)*m_shader_config->n_simt_clusters);
+  bool *cluster_all = (bool*)malloc(sizeof(bool)*m_shader_config->n_simt_clusters);
 
   // debug
   bool gpu_deadlock;
@@ -612,7 +617,7 @@ class gpgpu_sim : public gpgpu_t {
   const gpgpu_sim_config &m_config;
 
   const struct cudaDeviceProp *m_cuda_properties;
-  const shader_core_config *m_shader_config;
+
   const memory_config *m_memory_config;
 
   // stats

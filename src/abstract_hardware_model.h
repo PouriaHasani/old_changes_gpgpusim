@@ -1334,11 +1334,14 @@ class register_set {
     for (unsigned i = 0; i < regs.size(); i++) {
       if (not regs[i]->empty()) {
         if (ready and (*ready)->get_uid() < regs[i]->get_uid()) {
+
           // ready is oldest
         } else {
           ready = &regs[i];
-        }
+        }                                 
       }
+      //else
+        //printf("\nregs are empty");
     }
     return ready;
   }

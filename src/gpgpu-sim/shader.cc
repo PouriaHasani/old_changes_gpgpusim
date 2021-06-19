@@ -4131,7 +4131,7 @@ simt_core_cluster::simt_core_cluster(class gpgpu_sim *gpu, unsigned cluster_id,
 
 void simt_core_cluster::core_cycle() {
   for (std::list<unsigned>::iterator it = m_core_sim_order.begin();
-       it != m_core_sim_order.end(); ++it) {
+       it != m_core_sim_order.end(); ++it) {//printf("\n gpu_sim_insn:%d last_gpu_sim_insn: %d",gpu_sim_insn,last_gpu_sim_insn);
     m_core[*it]->cycle();
   }
 
